@@ -1,4 +1,5 @@
 import base64
+from html import escape
 import httpx
 
 from app.config import settings
@@ -25,7 +26,7 @@ class TelephonyService:
 
         voice = settings.twilio_voice_ro if language == "ro" else settings.twilio_voice_en
         twiml = (
-            f"<Response><Say voice=\"{voice}\" language=\"{'ro-RO' if language == 'ro' else 'en-US'}\">{full_message}</Say>"
+            f"<Response><Say voice=\"{voice}\" language=\"{'ro-RO' if language == 'ro' else 'en-US'}\">{escape(full_message, quote=False)}</Say>"
             "<Pause length=\"1\"/>"
             "</Response>"
         )

@@ -1,3 +1,5 @@
+from html import escape
+
 from fastapi import FastAPI, Form
 from fastapi.responses import PlainTextResponse
 
@@ -31,6 +33,10 @@ def build_intro(language: str) -> str:
 
 def twilio_voice_for_language(language: str) -> str:
     return settings.twilio_voice_ro if language == "ro" else settings.twilio_voice_en
+
+
+def xml_safe(text: str) -> str:
+    return escape(text, quote=False)
 
 
 def gather_loop(language_code: str) -> str:
@@ -121,8 +127,8 @@ async def twilio_voice(
         reprompt = "Nu te-am auzit clar. Te rog repetă întrebarea." if lang == "ro" else "I couldn't hear you clearly. Please repeat your question."
         return (
             '<?xml version="1.0" encoding="UTF-8"?>'
-            f'<Response><Say voice="{twilio_voice_for_language(lang)}" language="{lang_code}">{intro}</Say>'
-            f'<Say voice="{twilio_voice_for_language(lang)}" language="{lang_code}">{reprompt}</Say>'
+            f'<Response><Say voice="{twilio_voice_for_language(lang)}" language="{lang_code}">{xml_safe(intro)}</Say>'
+            f'<Say voice="{twilio_voice_for_language(lang)}" language="{lang_code}">{xml_safe(reprompt)}</Say>'
             f"{gather_loop(lang_code)}"
             "</Response>"
         )
@@ -136,7 +142,7 @@ async def twilio_voice(
         return (
             '<?xml version="1.0" encoding="UTF-8"?>'
             f"<Response><Say voice=\"{twilio_voice_for_language(detection.language)}\" language=\"{'ro-RO' if detection.language == 'ro' else 'en-US'}\">"
-            f"{intro}</Say>"
+            f"{xml_safe(intro)}</Say>"
             f"{gather_loop('ro-RO' if detection.language == 'ro' else 'en-US')}"
             "</Response>"
         )
@@ -161,7 +167,7 @@ async def twilio_voice(
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         f"<Response><Say voice=\"{twilio_voice_for_language(detection.language)}\" language=\"{'ro-RO' if detection.language == 'ro' else 'en-US'}\">"
-        f"{answer}</Say>"
+        f"{xml_safe(answer)}</Say>"
         f"{gather_loop('ro-RO' if detection.language == 'ro' else 'en-US')}"
         "</Response>"
     )

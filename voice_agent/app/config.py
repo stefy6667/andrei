@@ -17,8 +17,13 @@ class Settings(BaseSettings):
     intro_only_mode: bool = False
 
     # LLM config
+    llm_provider: str = "openai"  # openai | groq
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    openai_base_url: str = "https://api.openai.com/v1/chat/completions"
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.1-8b-instant"
+    groq_base_url: str = "https://api.groq.com/openai/v1/chat/completions"
 
     # Telephony
     twilio_account_sid: str = ""

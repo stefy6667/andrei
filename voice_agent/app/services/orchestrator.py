@@ -54,7 +54,17 @@ class OpenAILLMProvider:
         skill_instruction: str | None = None,
         conversation_history: list[dict[str, str]] | None = None,
     ) -> str:
-        if not settings.openai_api_key:
+        provider = settings.llm_provider.lower().strip()
+        if provider == "groq":
+            api_key = settings.groq_api_key
+            model = settings.groq_model
+            endpoint = settings.groq_base_url
+        else:
+            api_key = settings.openai_api_key
+            model = settings.openai_model
+            endpoint = settings.openai_base_url
+
+        if not api_key:
             return await MockLLMProvider().generate(
                 user_text,
                 language,
@@ -70,7 +80,7 @@ class OpenAILLMProvider:
         history = conversation_history or []
 
         payload = {
-            "model": settings.openai_model,
+            "model": model,
             "messages": [
                 {
                     "role": "system",
@@ -106,8 +116,8 @@ class OpenAILLMProvider:
 
         async with httpx.AsyncClient(timeout=20) as client:
             res = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                endpoint,
+                headers={"Authorization": f"Bearer {api_key}"},
                 json=payload,
             )
             res.raise_for_status()

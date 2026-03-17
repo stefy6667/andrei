@@ -61,7 +61,7 @@ Copy `.env.example` and set values:
 - Business:
   - `BUSINESS_NAME`, `BUSINESS_DOMAIN`, `AGENT_NAME`, `GREETING_RO`, `GREETING_EN`, `INTRO_ONLY_MODE`
 - LLM:
-  - `OPENAI_API_KEY`, `OPENAI_MODEL`
+  - `LLM_PROVIDER`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL`, `GROQ_API_KEY`, `GROQ_MODEL`, `GROQ_BASE_URL`
 - Behavior style:
   - `BEHAVIOR_STYLE_EN`, `BEHAVIOR_STYLE_RO`
 - Twilio:
@@ -90,6 +90,19 @@ Also customize introductions:
 GREETING_RO=Bună! Sunt Ana de la Compania X. Mă bucur să te ajut astăzi.
 GREETING_EN=Hello! I'm Ana from Company X. Happy to help you today.
 ```
+
+## Use Groq as AI provider
+
+You can switch from OpenAI to Groq (OpenAI-compatible API):
+
+```env
+LLM_PROVIDER=groq
+GROQ_API_KEY=your_groq_key
+GROQ_MODEL=llama-3.1-8b-instant
+GROQ_BASE_URL=https://api.groq.com/openai/v1/chat/completions
+```
+
+Keep `OPENAI_API_KEY` empty when using Groq.
 
 ## Intro-only mode (no Q&A)
 
@@ -199,3 +212,14 @@ If user speaks Romanian and agent repeats intro or misses intent:
 4. Ensure `OPENAI_API_KEY` is set for AI responses.
 
 The call loop now uses language-aware speech gather to improve recognition.
+
+
+## Troubleshooting: Twilio says system error after question
+
+This usually happens when generated text contains XML-breaking characters (`&`, `<`, `>`).
+The app now escapes TwiML speech text automatically to prevent call drops.
+
+If issue persists:
+1. Check Twilio debugger for exact error code.
+2. Confirm webhook method is `POST`.
+3. Confirm speech gather language is set (`TWILIO_DEFAULT_LANGUAGE=ro-RO` for Romanian-first flows).

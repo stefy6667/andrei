@@ -20,6 +20,19 @@ def test_language_switch_english():
     assert body["language"] == "en"
 
 
+def test_skills_endpoint_lists_sales():
+    res = client.get("/api/skills")
+    assert res.status_code == 200
+    names = [item["name"] for item in res.json()["skills"]]
+    assert "sales" in names
+
+
+def test_skill_selection_sales():
+    res = client.post("/api/simulate-turn", json={"session_id": "3", "user_text": "What is your pricing?"})
+    assert res.status_code == 200
+    assert res.json()["skill"] == "sales"
+
+
 def test_twilio_webhook_xml():
     res = client.post("/twilio/voice", data={"CallSid": "CA123", "SpeechResult": "Buna"})
     assert res.status_code == 200

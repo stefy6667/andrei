@@ -3,6 +3,7 @@ from fastapi.responses import PlainTextResponse
 
 from app.config import settings
 from app.models import SimulateTurnRequest, SimulateTurnResponse, TwilioOutboundRequest
+from app.services.agent_skills import SkillRegistry
 from app.services.integrations import build_integration_clients
 from app.services.knowledge_base import KnowledgeBase
 from app.services.language import LanguageDetector
@@ -14,6 +15,7 @@ from app.services.tools import ToolClient
 app = FastAPI(title="Bilingual Voice Agent")
 
 language_detector = LanguageDetector()
+skill_registry = SkillRegistry()
 kb = KnowledgeBase()
 llm = OpenAILLMProvider()
 sessions = SessionStore()
@@ -32,6 +34,11 @@ async def health() -> dict:
     return {"ok": True, "business": settings.business_name}
 
 
+@app.get("/api/skills")
+async def list_skills() -> dict:
+    return {"skills": skill_registry.list_skills()}
+
+
 @app.post("/api/simulate-turn", response_model=SimulateTurnResponse)
 async def simulate_turn(payload: SimulateTurnRequest) -> SimulateTurnResponse:
     detection = language_detector.detect(payload.user_text)
@@ -39,7 +46,9 @@ async def simulate_turn(payload: SimulateTurnRequest) -> SimulateTurnResponse:
 
     context = await tools.get_customer_context(payload.session_id)
     kb_answer = kb.search(payload.user_text, detection.language)
-    answer = await llm.generate(payload.user_text, detection.language, kb_answer, context)
+    active_skill = skill_registry.resolve(detection.language, payload.user_text)
+    skill_instruction = active_skill.prompt_instruction(detection.language) if active_skill else None
+    answer = await llm.generate(payload.user_text, detection.language, kb_answer, context, skill_instruction)
 
     source = "knowledge_base" if kb_answer else "llm"
     return SimulateTurnResponse(
@@ -47,6 +56,7 @@ async def simulate_turn(payload: SimulateTurnRequest) -> SimulateTurnResponse:
         language=detection.language,
         answer=answer,
         source=source,
+        skill=active_skill.name if active_skill else None,
     )
 
 
@@ -69,7 +79,9 @@ async def twilio_voice(
 
     context = await tools.get_customer_context(session_id)
     kb_answer = kb.search(SpeechResult, detection.language)
-    answer = await llm.generate(SpeechResult, detection.language, kb_answer, context)
+    active_skill = skill_registry.resolve(detection.language, SpeechResult)
+    skill_instruction = active_skill.prompt_instruction(detection.language) if active_skill else None
+    answer = await llm.generate(SpeechResult, detection.language, kb_answer, context, skill_instruction)
 
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'

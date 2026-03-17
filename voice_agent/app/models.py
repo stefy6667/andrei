@@ -11,6 +11,7 @@ class SimulateTurnResponse(BaseModel):
     language: str
     answer: str
     source: str
+    skill: str | None = None
 
 
 class TwilioOutboundRequest(BaseModel):

@@ -6,7 +6,8 @@ Production-ready **starter scaffold** for an AI support agent that:
 - answers dynamically (RAG + LLM provider abstraction, no hardcoded fixed script);
 - auto-switches between **Romanian** and **English** based on user input each turn;
 - can be customized per client business (company name, domain, agent identity, greetings);
-- can connect with client database + CRM/software APIs.
+- can connect with client database + CRM/software APIs;
+- supports plug-and-play business skills (Sales, Support, Retention) and easy extension.
 
 ## 1) Quick start
 
@@ -29,12 +30,30 @@ pytest -q
 ## 3) Main endpoints
 
 - `GET /health`
+- `GET /api/skills` (list installed plug-and-play skills)
 - `POST /api/simulate-turn`  
   JSON: `{ "session_id": "abc", "user_text": "Buna, vreau o factura" }`
 - `POST /twilio/voice` (Twilio voice webhook starter)
 - `POST /twilio/outbound` (outbound call trigger starter)
 
-## 4) Business customization
+## 4) Plug-and-play skills
+
+Implemented in `app/services/agent_skills.py`:
+- `sales`
+- `support`
+- `retention`
+
+How it works:
+- The app auto-detects an appropriate skill per turn from user intent.
+- The selected skill injects focused instructions into the LLM prompt.
+- If no skill matches, it falls back to generic assistant behavior.
+
+To add a new skill (e.g., billing/collections/appointments):
+1. Create a new class implementing `can_handle()` and `prompt_instruction()`.
+2. Register it in `SkillRegistry`.
+3. (Optional) add tests for selection behavior.
+
+## 5) Business customization
 
 Set in `.env`:
 - `BUSINESS_NAME`
@@ -45,7 +64,7 @@ Set in `.env`:
 
 These are injected into greetings and LLM system instructions.
 
-## 5) Database + client software integration
+## 6) Database + client software integration
 
 - `app/services/integrations.py` contains:
   - `DatabaseClient` (placeholder adapter for PostgreSQL/MySQL/etc)
@@ -56,14 +75,14 @@ These are injected into greetings and LLM system instructions.
   - `CRM_API_BASE_URL`
   - `CRM_API_KEY`
 
-## 6) How language switching works
+## 7) How language switching works
 
 - Language is detected each turn (`ro` / `en`) with confidence.
 - Session language is updated continuously.
 - Agent response is generated in detected language.
 - If user switches language mid-conversation, response follows automatically.
 
-## 7) How to customize for production
+## 8) How to customize for production
 
 ### Providers
 - Replace `OpenAILLMProvider` with your preferred model/provider if needed.
@@ -77,6 +96,6 @@ These are injected into greetings and LLM system instructions.
 - Extend `DatabaseClient.fetch_customer_profile()` with real queries.
 - Extend `CRMClient.fetch_open_tickets()` and add additional methods (orders, invoices, subscriptions).
 
-## 8) Suggested next step
+## 9) Suggested next step
 
 Add real-time audio streaming (Twilio Media Streams websocket + streaming STT + streaming TTS).

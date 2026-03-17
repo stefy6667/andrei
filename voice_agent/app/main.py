@@ -74,15 +74,27 @@ async def simulate_turn(payload: SimulateTurnRequest) -> SimulateTurnResponse:
     detection = language_detector.detect(payload.user_text)
 
     if settings.intro_only_mode:
-        return intro_only_response(detection.language, payload.session_id)
+        result = intro_only_response(detection.language, payload.session_id)
+        sessions.append_turn(payload.session_id, "assistant", result.answer)
+        return result
 
     sessions.upsert_language(payload.session_id, detection.language)
 
+    sessions.append_turn(payload.session_id, "user", payload.user_text)
     context = await tools.get_customer_context(payload.session_id)
     kb_answer = kb.search(payload.user_text, detection.language)
     active_skill = skill_registry.resolve(detection.language, payload.user_text)
     skill_instruction = active_skill.prompt_instruction(detection.language) if active_skill else None
-    answer = await llm.generate(payload.user_text, detection.language, kb_answer, context, skill_instruction)
+    history = sessions.get_recent_turns(payload.session_id)
+    answer = await llm.generate(
+        payload.user_text,
+        detection.language,
+        kb_answer,
+        context,
+        skill_instruction,
+        history,
+    )
+    sessions.append_turn(payload.session_id, "assistant", answer)
 
     source = "knowledge_base" if kb_answer else "llm"
     return SimulateTurnResponse(
@@ -111,9 +123,11 @@ async def twilio_voice(
         )
 
     detection = language_detector.detect(SpeechResult)
+    sessions.append_turn(session_id, "user", SpeechResult)
 
     if settings.intro_only_mode:
         intro = build_intro(detection.language)
+        sessions.append_turn(session_id, "assistant", intro)
         return (
             '<?xml version="1.0" encoding="UTF-8"?>'
             f"<Response><Say voice=\"{twilio_voice_for_language(detection.language)}\" language=\"{'ro-RO' if detection.language == 'ro' else 'en-US'}\">"
@@ -128,7 +142,16 @@ async def twilio_voice(
     kb_answer = kb.search(SpeechResult, detection.language)
     active_skill = skill_registry.resolve(detection.language, SpeechResult)
     skill_instruction = active_skill.prompt_instruction(detection.language) if active_skill else None
-    answer = await llm.generate(SpeechResult, detection.language, kb_answer, context, skill_instruction)
+    history = sessions.get_recent_turns(session_id)
+    answer = await llm.generate(
+        SpeechResult,
+        detection.language,
+        kb_answer,
+        context,
+        skill_instruction,
+        history,
+    )
+    sessions.append_turn(session_id, "assistant", answer)
 
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'

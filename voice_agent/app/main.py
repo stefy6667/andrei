@@ -33,9 +33,9 @@ def twilio_voice_for_language(language: str) -> str:
     return settings.twilio_voice_ro if language == "ro" else settings.twilio_voice_en
 
 
-def gather_loop() -> str:
+def gather_loop(language_code: str) -> str:
     return (
-        "<Gather input=\"speech\" action=\"/twilio/voice\" method=\"POST\" timeout=\"5\" speechTimeout=\"auto\" />"
+        f"<Gather input=\"speech\" language=\"{language_code}\" action=\"/twilio/voice\" method=\"POST\" timeout=\"5\" speechTimeout=\"auto\" />"
         "<Pause length=\"1\"/>"
         "<Redirect method=\"POST\">/twilio/voice</Redirect>"
     )
@@ -61,6 +61,7 @@ async def health() -> dict:
         "environment": settings.environment,
         "business": settings.business_name,
         "skills": len(skill_registry.list_skills()),
+        "intro_only_mode": settings.intro_only_mode,
     }
 
 
@@ -114,11 +115,15 @@ async def twilio_voice(
     session_id = CallSid or "unknown-call"
 
     if not SpeechResult:
-        intro = f"{build_intro('en')} / {build_intro('ro')}"
+        lang_code = settings.twilio_default_language
+        lang = "ro" if lang_code.startswith("ro") else "en"
+        intro = build_intro(lang)
+        reprompt = "Nu te-am auzit clar. Te rog repetă întrebarea." if lang == "ro" else "I couldn't hear you clearly. Please repeat your question."
         return (
             '<?xml version="1.0" encoding="UTF-8"?>'
-            f'<Response><Say voice="{settings.twilio_voice_en}" language="en-US">{intro}</Say>'
-            f"{gather_loop()}"
+            f'<Response><Say voice="{twilio_voice_for_language(lang)}" language="{lang_code}">{intro}</Say>'
+            f'<Say voice="{twilio_voice_for_language(lang)}" language="{lang_code}">{reprompt}</Say>'
+            f"{gather_loop(lang_code)}"
             "</Response>"
         )
 
@@ -132,7 +137,7 @@ async def twilio_voice(
             '<?xml version="1.0" encoding="UTF-8"?>'
             f"<Response><Say voice=\"{twilio_voice_for_language(detection.language)}\" language=\"{'ro-RO' if detection.language == 'ro' else 'en-US'}\">"
             f"{intro}</Say>"
-            f"{gather_loop()}"
+            f"{gather_loop('ro-RO' if detection.language == 'ro' else 'en-US')}"
             "</Response>"
         )
 
@@ -157,7 +162,7 @@ async def twilio_voice(
         '<?xml version="1.0" encoding="UTF-8"?>'
         f"<Response><Say voice=\"{twilio_voice_for_language(detection.language)}\" language=\"{'ro-RO' if detection.language == 'ro' else 'en-US'}\">"
         f"{answer}</Say>"
-        f"{gather_loop()}"
+        f"{gather_loop('ro-RO' if detection.language == 'ro' else 'en-US')}"
         "</Response>"
     )
 

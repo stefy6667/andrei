@@ -38,6 +38,7 @@ def test_twilio_webhook_xml():
     assert res.status_code == 200
     assert "<Response><Say" in res.text
     assert "voice=" in res.text
+    assert "language=" in res.text
     assert "<Gather" in res.text
     assert "<Redirect" in res.text
 
@@ -49,6 +50,7 @@ def test_health_payload():
     assert body["ok"] is True
     assert "business" in body
     assert "skills" in body
+    assert "intro_only_mode" in body
 
 
 def test_intro_only_mode_returns_intro():

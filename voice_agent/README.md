@@ -65,7 +65,7 @@ Copy `.env.example` and set values:
 - Behavior style:
   - `BEHAVIOR_STYLE_EN`, `BEHAVIOR_STYLE_RO`
 - Twilio:
-  - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `TWILIO_VOICE_EN`, `TWILIO_VOICE_RO`
+  - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `TWILIO_VOICE_EN`, `TWILIO_VOICE_RO`, `TWILIO_DEFAULT_LANGUAGE`
 - Integrations:
   - `DATABASE_URL` (defaults to SQLite)
   - `CRM_API_BASE_URL`, `CRM_API_KEY`
@@ -77,8 +77,9 @@ Copy `.env.example` and set values:
 To make the assistant sound more natural:
 
 ```env
-TWILIO_VOICE_EN=Polly.Joanna-Neural
-TWILIO_VOICE_RO=alice
+TWILIO_VOICE_EN=Polly.Amy-Neural
+TWILIO_VOICE_RO=Google.ro-RO-Standard-A
+TWILIO_DEFAULT_LANGUAGE=ro-RO
 BEHAVIOR_STYLE_EN=Warm, friendly, concise, and natural. Use short sentences and empathy.
 BEHAVIOR_STYLE_RO=Cald, prietenos, concis și natural. Folosește propoziții scurte și empatie.
 ```
@@ -184,5 +185,17 @@ Also use more natural voices:
 
 ```env
 TWILIO_VOICE_EN=Polly.Amy-Neural
-TWILIO_VOICE_RO=Polly.Carmen
+TWILIO_VOICE_RO=Google.ro-RO-Standard-A
 ```
+
+
+## Troubleshooting: doesn't respond to question (RO)
+
+If user speaks Romanian and agent repeats intro or misses intent:
+
+1. Set `INTRO_ONLY_MODE=false`.
+2. Set `TWILIO_DEFAULT_LANGUAGE=ro-RO`.
+3. Keep Twilio webhook method as `POST` to `/twilio/voice`.
+4. Ensure `OPENAI_API_KEY` is set for AI responses.
+
+The call loop now uses language-aware speech gather to improve recognition.

@@ -37,6 +37,7 @@ def test_twilio_webhook_xml():
     res = client.post("/twilio/voice", data={"CallSid": "CA123", "SpeechResult": "Buna"})
     assert res.status_code == 200
     assert "<Response><Say" in res.text
+    assert "voice=" in res.text
     assert "<Gather" in res.text
 
 

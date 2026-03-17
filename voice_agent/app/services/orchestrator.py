@@ -32,14 +32,13 @@ class MockLLMProvider:
         skill_text = f" [{skill_instruction}]" if skill_instruction else ""
         if language == "ro":
             return (
-                f"Sunt {settings.agent_name} de la {settings.business_name}.{skill_text} "
-                "Te pot ajuta cu această solicitare. Îmi poți da mai multe detalii "
-                "ca să verific corect în sistem?"
+                f"Salut! Sunt {settings.agent_name} de la {settings.business_name}.{skill_text} "
+                "Te ajut cu drag. Spune-mi, te rog, câteva detalii și rezolvăm împreună."
             )
 
         return (
-            f"I'm {settings.agent_name} from {settings.business_name}.{skill_text} "
-            "I can help with this request. Could you share a few more details so I can verify properly?"
+            f"Hi! I'm {settings.agent_name} from {settings.business_name}.{skill_text} "
+            "Happy to help. Please share a few details and we’ll sort this out together."
         )
 
 
@@ -70,8 +69,12 @@ class OpenAILLMProvider:
                         f"Business domain: {settings.business_domain}. "
                         f"Agent display name: {settings.agent_name}. "
                         "Reply in the same language as the user. "
+                        "Sound human and natural (not robotic), use short conversational phrasing. "
+                        "Acknowledge the user politely before giving help. "
                         "Do not invent policy details. "
-                        "Use available customer context and be concise."
+                        "Use available customer context and be concise. "
+                        f"Behavior EN: {settings.behavior_style_en}. "
+                        f"Behavior RO: {settings.behavior_style_ro}."
                     ),
                 },
                 {

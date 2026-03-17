@@ -62,13 +62,33 @@ Copy `.env.example` and set values:
   - `BUSINESS_NAME`, `BUSINESS_DOMAIN`, `AGENT_NAME`, `GREETING_RO`, `GREETING_EN`, `INTRO_ONLY_MODE`
 - LLM:
   - `OPENAI_API_KEY`, `OPENAI_MODEL`
+- Behavior style:
+  - `BEHAVIOR_STYLE_EN`, `BEHAVIOR_STYLE_RO`
 - Twilio:
-  - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`
+  - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `TWILIO_VOICE_EN`, `TWILIO_VOICE_RO`
 - Integrations:
   - `DATABASE_URL` (defaults to SQLite)
   - `CRM_API_BASE_URL`, `CRM_API_KEY`
 
 ---
+
+## Human-like behavior & voice tuning
+
+To make the assistant sound more natural:
+
+```env
+TWILIO_VOICE_EN=Polly.Joanna-Neural
+TWILIO_VOICE_RO=alice
+BEHAVIOR_STYLE_EN=Warm, friendly, concise, and natural. Use short sentences and empathy.
+BEHAVIOR_STYLE_RO=Cald, prietenos, concis și natural. Folosește propoziții scurte și empatie.
+```
+
+Also customize introductions:
+
+```env
+GREETING_RO=Bună! Sunt Ana de la Compania X. Mă bucur să te ajut astăzi.
+GREETING_EN=Hello! I'm Ana from Company X. Happy to help you today.
+```
 
 ## Intro-only mode (no Q&A)
 

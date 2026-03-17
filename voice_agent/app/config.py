@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
     twilio_from_number: str = ""
+    twilio_voice_en: str = "Polly.Joanna-Neural"
+    twilio_voice_ro: str = "alice"
+
+    # Conversation behavior
+    behavior_style_en: str = "Warm, friendly, concise, and natural. Use short sentences and empathy."
+    behavior_style_ro: str = "Cald, prietenos, concis și natural. Folosește propoziții scurte și empatie."
 
     # Data integrations
     database_url: str = "sqlite:///./voice_agent.db"

@@ -24,3 +24,9 @@ def test_twilio_webhook_xml():
     res = client.post("/twilio/voice", data={"CallSid": "CA123", "SpeechResult": "Buna"})
     assert res.status_code == 200
     assert "<Response><Say" in res.text
+
+
+def test_health_includes_business_name():
+    res = client.get("/health")
+    assert res.status_code == 200
+    assert "business" in res.json()

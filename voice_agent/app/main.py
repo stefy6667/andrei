@@ -1,7 +1,9 @@
 from fastapi import FastAPI, Form
 from fastapi.responses import PlainTextResponse
 
+from app.config import settings
 from app.models import SimulateTurnRequest, SimulateTurnResponse, TwilioOutboundRequest
+from app.services.integrations import build_integration_clients
 from app.services.knowledge_base import KnowledgeBase
 from app.services.language import LanguageDetector
 from app.services.orchestrator import OpenAILLMProvider
@@ -15,13 +17,19 @@ language_detector = LanguageDetector()
 kb = KnowledgeBase()
 llm = OpenAILLMProvider()
 sessions = SessionStore()
-tools = ToolClient()
+db_client, crm_client = build_integration_clients()
+tools = ToolClient(db_client, crm_client)
 telephony = TelephonyService()
+
+
+def build_intro(language: str) -> str:
+    template = settings.greeting_ro if language == "ro" else settings.greeting_en
+    return template.format(agent_name=settings.agent_name, business_name=settings.business_name)
 
 
 @app.get("/health")
 async def health() -> dict:
-    return {"ok": True}
+    return {"ok": True, "business": settings.business_name}
 
 
 @app.post("/api/simulate-turn", response_model=SimulateTurnResponse)
@@ -29,9 +37,9 @@ async def simulate_turn(payload: SimulateTurnRequest) -> SimulateTurnResponse:
     detection = language_detector.detect(payload.user_text)
     sessions.upsert_language(payload.session_id, detection.language)
 
-    _context = await tools.get_customer_context(payload.session_id)
+    context = await tools.get_customer_context(payload.session_id)
     kb_answer = kb.search(payload.user_text, detection.language)
-    answer = await llm.generate(payload.user_text, detection.language, kb_answer)
+    answer = await llm.generate(payload.user_text, detection.language, kb_answer, context)
 
     source = "knowledge_base" if kb_answer else "llm"
     return SimulateTurnResponse(
@@ -47,15 +55,21 @@ async def twilio_voice(
     CallSid: str = Form(default=""),
     SpeechResult: str = Form(default=""),
 ) -> str:
-    # Twilio-style webhook starter. In production use Media Streams + STT/TTS.
     session_id = CallSid or "unknown-call"
-    text = SpeechResult or "hello"
 
-    detection = language_detector.detect(text)
+    if not SpeechResult:
+        intro = build_intro("en")
+        return (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            f'<Response><Say language="en-US">{intro}</Say><Gather input="speech" /></Response>'
+        )
+
+    detection = language_detector.detect(SpeechResult)
     sessions.upsert_language(session_id, detection.language)
 
-    kb_answer = kb.search(text, detection.language)
-    answer = await llm.generate(text, detection.language, kb_answer)
+    context = await tools.get_customer_context(session_id)
+    kb_answer = kb.search(SpeechResult, detection.language)
+    answer = await llm.generate(SpeechResult, detection.language, kb_answer, context)
 
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'

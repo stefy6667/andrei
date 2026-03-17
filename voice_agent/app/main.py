@@ -29,6 +29,18 @@ def build_intro(language: str) -> str:
     return template.format(agent_name=settings.agent_name, business_name=settings.business_name)
 
 
+def intro_only_response(language: str, session_id: str) -> SimulateTurnResponse:
+    intro = build_intro(language)
+    sessions.upsert_language(session_id, language)
+    return SimulateTurnResponse(
+        session_id=session_id,
+        language=language,
+        answer=intro,
+        source="intro_only",
+        skill=None,
+    )
+
+
 @app.get("/health")
 async def health() -> dict:
     return {
@@ -48,6 +60,10 @@ async def list_skills() -> dict:
 @app.post("/api/simulate-turn", response_model=SimulateTurnResponse)
 async def simulate_turn(payload: SimulateTurnRequest) -> SimulateTurnResponse:
     detection = language_detector.detect(payload.user_text)
+
+    if settings.intro_only_mode:
+        return intro_only_response(detection.language, payload.session_id)
+
     sessions.upsert_language(payload.session_id, detection.language)
 
     context = await tools.get_customer_context(payload.session_id)
@@ -83,6 +99,17 @@ async def twilio_voice(
         )
 
     detection = language_detector.detect(SpeechResult)
+
+    if settings.intro_only_mode:
+        intro = build_intro(detection.language)
+        return (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            f"<Response><Say language=\"{'ro-RO' if detection.language == 'ro' else 'en-US'}\">"
+            f"{intro}</Say>"
+            '<Gather input="speech" action="/twilio/voice" method="POST" timeout="3" speechTimeout="auto" />'
+            "</Response>"
+        )
+
     sessions.upsert_language(session_id, detection.language)
 
     context = await tools.get_customer_context(session_id)

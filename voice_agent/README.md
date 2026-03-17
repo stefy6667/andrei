@@ -59,7 +59,7 @@ Copy `.env.example` and set values:
 - App/runtime:
   - `APP_NAME`, `ENVIRONMENT`, `HOST`, `PORT`, `PUBLIC_BASE_URL`
 - Business:
-  - `BUSINESS_NAME`, `BUSINESS_DOMAIN`, `AGENT_NAME`, `GREETING_RO`, `GREETING_EN`
+  - `BUSINESS_NAME`, `BUSINESS_DOMAIN`, `AGENT_NAME`, `GREETING_RO`, `GREETING_EN`, `INTRO_ONLY_MODE`
 - LLM:
   - `OPENAI_API_KEY`, `OPENAI_MODEL`
 - Twilio:
@@ -67,6 +67,18 @@ Copy `.env.example` and set values:
 - Integrations:
   - `DATABASE_URL` (defaults to SQLite)
   - `CRM_API_BASE_URL`, `CRM_API_KEY`
+
+---
+
+## Intro-only mode (no Q&A)
+
+If you want the bot to only greet and never answer questions, set:
+
+```env
+INTRO_ONLY_MODE=true
+```
+
+In this mode, every turn returns only your configured intro (`GREETING_RO` / `GREETING_EN`).
 
 ---
 

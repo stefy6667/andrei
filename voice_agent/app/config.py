@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     agent_name: str = "Alex"
     greeting_ro: str = "Bună! Sunt {agent_name} de la {business_name}. Cu ce te pot ajuta astăzi?"
     greeting_en: str = "Hello! I'm {agent_name} from {business_name}. How can I help you today?"
+    intro_only_mode: bool = False
 
     # LLM config
     openai_api_key: str = ""

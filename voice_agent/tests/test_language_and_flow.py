@@ -47,3 +47,17 @@ def test_health_payload():
     assert body["ok"] is True
     assert "business" in body
     assert "skills" in body
+
+
+def test_intro_only_mode_returns_intro():
+    from app.config import settings
+
+    old = settings.intro_only_mode
+    settings.intro_only_mode = True
+    try:
+        res = client.post("/api/simulate-turn", json={"session_id": "99", "user_text": "Ce pret aveti?"})
+        assert res.status_code == 200
+        body = res.json()
+        assert body["source"] == "intro_only"
+    finally:
+        settings.intro_only_mode = old

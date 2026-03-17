@@ -3,6 +3,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "voice-agent"
+    environment: str = "production"
+    host: str = "0.0.0.0"
+    port: int = 8000
+    public_base_url: str = "http://localhost:8000"
 
     # Business customization
     business_name: str = "Your Company"
@@ -21,7 +25,7 @@ class Settings(BaseSettings):
     twilio_from_number: str = ""
 
     # Data integrations
-    database_url: str = ""
+    database_url: str = "sqlite:///./voice_agent.db"
     crm_api_base_url: str = ""
     crm_api_key: str = ""
 

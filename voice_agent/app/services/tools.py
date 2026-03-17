@@ -12,7 +12,8 @@ class ToolClient:
 
         return {
             "session_id": session_id,
-            "tier": "standard",
+            "customer_id": profile.get("customer_id"),
+            "tier": profile.get("tier", "standard"),
             "open_tickets": tickets.get("open_tickets", 0),
             "database_connected": profile.get("database_connected", False),
             "crm_connected": tickets.get("crm_connected", False),

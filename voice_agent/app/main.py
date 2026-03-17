@@ -31,7 +31,13 @@ def build_intro(language: str) -> str:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"ok": True, "business": settings.business_name}
+    return {
+        "ok": True,
+        "app": settings.app_name,
+        "environment": settings.environment,
+        "business": settings.business_name,
+        "skills": len(skill_registry.list_skills()),
+    }
 
 
 @app.get("/api/skills")
@@ -68,10 +74,12 @@ async def twilio_voice(
     session_id = CallSid or "unknown-call"
 
     if not SpeechResult:
-        intro = build_intro("en")
+        intro = f"{build_intro('en')} / {build_intro('ro')}"
         return (
             '<?xml version="1.0" encoding="UTF-8"?>'
-            f'<Response><Say language="en-US">{intro}</Say><Gather input="speech" /></Response>'
+            f'<Response><Say language="en-US">{intro}</Say>'
+            '<Gather input="speech" action="/twilio/voice" method="POST" timeout="3" speechTimeout="auto" />'
+            "</Response>"
         )
 
     detection = language_detector.detect(SpeechResult)
@@ -86,7 +94,9 @@ async def twilio_voice(
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         f"<Response><Say language=\"{'ro-RO' if detection.language == 'ro' else 'en-US'}\">"
-        f"{answer}</Say></Response>"
+        f"{answer}</Say>"
+        '<Gather input="speech" action="/twilio/voice" method="POST" timeout="3" speechTimeout="auto" />'
+        "</Response>"
     )
 
 

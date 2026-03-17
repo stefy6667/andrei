@@ -166,3 +166,23 @@ If dependencies are unavailable in your environment, run at least syntax validat
 ```bash
 python -m compileall app
 ```
+
+
+## Troubleshooting: Call closes after hello
+
+If the call closes after the first phrase, ensure:
+
+1. Twilio webhook is `POST` to `/twilio/voice`.
+2. You redeployed latest version (which includes a Gather+Redirect loop).
+3. Trial limitations are handled (verified caller ID).
+
+The new call loop keeps the session open:
+- `<Gather ... />`
+- fallback `<Redirect ...>/twilio/voice</Redirect>`
+
+Also use more natural voices:
+
+```env
+TWILIO_VOICE_EN=Polly.Amy-Neural
+TWILIO_VOICE_RO=Polly.Carmen
+```

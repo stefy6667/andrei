@@ -24,7 +24,11 @@ class TelephonyService:
             }
 
         voice = settings.twilio_voice_ro if language == "ro" else settings.twilio_voice_en
-        twiml = f"<Response><Say voice=\"{voice}\" language=\"{'ro-RO' if language == 'ro' else 'en-US'}\">{full_message}</Say></Response>"
+        twiml = (
+            f"<Response><Say voice=\"{voice}\" language=\"{'ro-RO' if language == 'ro' else 'en-US'}\">{full_message}</Say>"
+            "<Pause length=\"1\"/>"
+            "</Response>"
+        )
         auth = base64.b64encode(
             f"{settings.twilio_account_sid}:{settings.twilio_auth_token}".encode("utf-8")
         ).decode("utf-8")

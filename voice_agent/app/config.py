@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
     twilio_from_number: str = ""
-    twilio_voice_en: str = "Polly.Joanna-Neural"
-    twilio_voice_ro: str = "alice"
+    twilio_voice_en: str = "Polly.Amy-Neural"
+    twilio_voice_ro: str = "Polly.Carmen"
 
     # Conversation behavior
     behavior_style_en: str = "Warm, friendly, concise, and natural. Use short sentences and empathy."

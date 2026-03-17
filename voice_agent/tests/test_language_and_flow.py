@@ -39,6 +39,7 @@ def test_twilio_webhook_xml():
     assert "<Response><Say" in res.text
     assert "voice=" in res.text
     assert "<Gather" in res.text
+    assert "<Redirect" in res.text
 
 
 def test_health_payload():

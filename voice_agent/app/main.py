@@ -33,6 +33,14 @@ def twilio_voice_for_language(language: str) -> str:
     return settings.twilio_voice_ro if language == "ro" else settings.twilio_voice_en
 
 
+def gather_loop() -> str:
+    return (
+        "<Gather input=\"speech\" action=\"/twilio/voice\" method=\"POST\" timeout=\"5\" speechTimeout=\"auto\" />"
+        "<Pause length=\"1\"/>"
+        "<Redirect method=\"POST\">/twilio/voice</Redirect>"
+    )
+
+
 def intro_only_response(language: str, session_id: str) -> SimulateTurnResponse:
     intro = build_intro(language)
     sessions.upsert_language(session_id, language)
@@ -98,7 +106,7 @@ async def twilio_voice(
         return (
             '<?xml version="1.0" encoding="UTF-8"?>'
             f'<Response><Say voice="{settings.twilio_voice_en}" language="en-US">{intro}</Say>'
-            '<Gather input="speech" action="/twilio/voice" method="POST" timeout="3" speechTimeout="auto" />'
+            f"{gather_loop()}"
             "</Response>"
         )
 
@@ -110,7 +118,7 @@ async def twilio_voice(
             '<?xml version="1.0" encoding="UTF-8"?>'
             f"<Response><Say voice=\"{twilio_voice_for_language(detection.language)}\" language=\"{'ro-RO' if detection.language == 'ro' else 'en-US'}\">"
             f"{intro}</Say>"
-            '<Gather input="speech" action="/twilio/voice" method="POST" timeout="3" speechTimeout="auto" />'
+            f"{gather_loop()}"
             "</Response>"
         )
 
@@ -126,7 +134,7 @@ async def twilio_voice(
         '<?xml version="1.0" encoding="UTF-8"?>'
         f"<Response><Say voice=\"{twilio_voice_for_language(detection.language)}\" language=\"{'ro-RO' if detection.language == 'ro' else 'en-US'}\">"
         f"{answer}</Say>"
-        '<Gather input="speech" action="/twilio/voice" method="POST" timeout="3" speechTimeout="auto" />'
+        f"{gather_loop()}"
         "</Response>"
     )
 

@@ -213,3 +213,14 @@ def test_sales_callback_request_creates_outbound_action():
     assert body["actions"]
     assert body["actions"][0]["provider"] == "twilio"
     assert "apel" in body["answer"].lower() or "call" in body["answer"].lower()
+
+
+def test_kb_answer_is_conversational_not_raw_faq_playback():
+    res = client.post(
+        "/api/simulate-turn",
+        json={"session_id": "kb-chat", "user_text": "Buna, vreau factura"},
+    )
+    assert res.status_code == 200
+    answer = res.json()["answer"]
+    assert "Din informațiile pe care le am" in answer or "te pot ajuta" in answer
+    assert not answer.startswith("Poți primi factura pe email")

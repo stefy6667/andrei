@@ -41,6 +41,40 @@ class MockLLMProvider:
         )
 
     @staticmethod
+    def _grounded_kb_reply(language: str, user_text: str, kb_match: KnowledgeMatch) -> str:
+        source = kb_match.source.lower()
+        if language == "ro":
+            if "factura" in source:
+                return (
+                    "Da, te pot ajuta cu factura. Din informațiile pe care le am, factura se trimite pe email după confirmarea plății, "
+                    "de obicei în maximum 24 de ore. Dacă vrei, putem vedea imediat dacă ai nevoie de retransmitere sau de schimbarea adresei de email."
+                )
+            if "comanda" in source or "livrare" in source:
+                return (
+                    "Sigur. Din informațiile pe care le am, livrarea durează de regulă între 1 și 3 zile lucrătoare. "
+                    "Dacă vrei, spune-mi când ai plasat comanda și te ajut să estimăm mai exact."
+                )
+            return (
+                f"Din informațiile pe care le am, răspunsul este acesta: {kb_match.answer} "
+                "Dacă vrei, îl transformăm imediat într-un pas concret pentru situația ta."
+            )
+
+        if "invoice" in source:
+            return (
+                "Yes, I can help with the invoice. From the information I have, the invoice is usually sent by email after payment confirmation, "
+                "typically within 24 hours. If you want, we can immediately check whether you need it resent or need to update the email address."
+            )
+        if "delivery" in source or "order" in source:
+            return (
+                "Sure. From the information I have, delivery usually takes 1 to 3 business days. "
+                "If you want, tell me when you placed the order and I’ll help estimate it more precisely."
+            )
+        return (
+            f"From the information I have, the answer is: {kb_match.answer} "
+            "If you want, I can turn that into a concrete next step for your case."
+        )
+
+    @staticmethod
     def _natural_reply(user_text: str, language: str, skill_instruction: str | None) -> str:
         if language == "ro":
             if skill_instruction and "SALES" in skill_instruction:
@@ -88,22 +122,9 @@ class MockLLMProvider:
             if repeated and is_invoice:
                 return self._invoice_follow_up(language)
 
-            if language == "ro":
-                base = f"Sigur — {kb_match.answer}"
-                next_step = (
-                    " Dacă vrei, pot continua și să te ghidez mai departe pentru factura ta."
-                    if is_invoice
-                    else " Dacă vrei, pot continua cu următorul pas."
-                )
-                return f"{base}{next_step} (Sursă: {kb_match.source})"
-
-            base = f"Sure — {kb_match.answer}"
-            next_step = (
-                " If you want, I can also guide you through the next invoice step."
-                if is_invoice
-                else " If you want, I can continue with the next step."
-            )
-            return f"{base}{next_step} (Source: {kb_match.source})"
+            grounded = self._grounded_kb_reply(language, user_text, kb_match)
+            citation = f" (Sursă: {kb_match.source})" if language == "ro" else f" (Source: {kb_match.source})"
+            return f"{grounded}{citation}"
 
         return self._natural_reply(user_text, language, skill_instruction)
 
@@ -157,7 +178,8 @@ class OpenAILLMProvider:
                         "Reply in the same language as the user. "
                         "Keep responses brief, natural, and human-sounding for speech. "
                         "Sound like a real chatbot assistant, not a rigid support script. "
-                        "Use knowledge base evidence as grounding, but do not sound like a rigid FAQ bot. "
+                        "Use knowledge base evidence as grounding, but do not repeat FAQ wording verbatim unless absolutely necessary. "
+                        "Do not sound like a rigid FAQ bot; sound like a helpful chatbot that is thinking through the user's case. "
                         "If the user repeats the same topic, do not repeat the same sentence verbatim; instead move the conversation forward with the next helpful question or action. "
                         "If web research or URL inspection results are present, weave them into the reply naturally like a real AI assistant. "
                         "If knowledge base evidence is present, mention the source label naturally. "

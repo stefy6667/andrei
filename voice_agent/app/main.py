@@ -127,6 +127,19 @@ def build_outbound_confirmation(language: str, phone_number: str, status: str) -
     return f"Perfect, I scheduled a callback to {phone_number}. You should receive the call shortly."
 
 
+def should_use_kb_match(user_text: str, kb_match: KnowledgeMatch | None) -> bool:
+    if kb_match is None:
+        return False
+    lowered = user_text.lower()
+    request_markers = [
+        "?", "cum", "când", "cand", "unde", "ce", "vreau", "aș vrea", "as vrea", "poți", "poti",
+        "help", "how", "when", "where", "can you", "i need", "i want", "please",
+    ]
+    if kb_match.confidence >= 0.75:
+        return True
+    return any(marker in lowered for marker in request_markers)
+
+
 async def build_turn_response(session_id: str, user_text: str) -> SimulateTurnResponse:
     previous_language = sessions.get_language(session_id)
     detection = language_detector.detect(user_text, previous_language=previous_language)
@@ -146,7 +159,8 @@ async def build_turn_response(session_id: str, user_text: str) -> SimulateTurnRe
         context["research"] = research_result
         actions.append(research_result)
 
-    kb_match = kb.search(user_text, detection.language)
+    raw_kb_match = kb.search(user_text, detection.language)
+    kb_match = raw_kb_match if should_use_kb_match(user_text, raw_kb_match) else None
     active_skill = skill_registry.resolve(detection.language, user_text)
     skill_instruction = active_skill.prompt_instruction(detection.language) if active_skill else None
     history = sessions.get_recent_turns(session_id)

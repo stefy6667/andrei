@@ -224,3 +224,12 @@ def test_kb_answer_is_conversational_not_raw_faq_playback():
     answer = res.json()["answer"]
     assert "Din informațiile pe care le am" in answer or "te pot ajuta" in answer
     assert not answer.startswith("Poți primi factura pe email")
+
+
+def test_kb_is_not_used_for_non_questional_fact_mention():
+    res = client.post(
+        "/api/simulate-turn",
+        json={"session_id": "kb-gate", "user_text": "Am plătit factura ieri"},
+    )
+    assert res.status_code == 200
+    assert res.json()["source"] != "knowledge_base"

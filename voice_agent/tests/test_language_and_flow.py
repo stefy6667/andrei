@@ -134,3 +134,18 @@ def test_schedule_call_endpoint_dry_run_without_google_credentials():
     assert body["status"] == "dry_run"
     assert body["provider"] == "google_calendar"
     assert body["meet_link"]
+
+
+def test_invoice_follow_up_does_not_repeat_same_kb_answer():
+    first = client.post(
+        "/api/simulate-turn",
+        json={"session_id": "invoice-loop", "user_text": "Buna, vreau factura"},
+    )
+    second = client.post(
+        "/api/simulate-turn",
+        json={"session_id": "invoice-loop", "user_text": "Da, dar am nevoie de ajutor cu factura"},
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["answer"] != first.json()["answer"]
+    assert "email" in second.json()["answer"].lower() or "factura" in second.json()["answer"].lower()

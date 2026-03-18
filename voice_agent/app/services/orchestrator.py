@@ -40,6 +40,29 @@ class MockLLMProvider:
             "need to update the billing address, or want me to check the latest payment."
         )
 
+    @staticmethod
+    def _natural_reply(user_text: str, language: str, skill_instruction: str | None) -> str:
+        if language == "ro":
+            if skill_instruction and "SALES" in skill_instruction:
+                return (
+                    "Sigur, hai să găsim varianta potrivită pentru tine. "
+                    "Spune-mi ce vrei să obții și ce buget ai în minte, iar eu îți recomand cea mai bună opțiune."
+                )
+            return (
+                f"În regulă, te ajut cu asta. Ai spus: „{user_text}”. "
+                "Dă-mi încă un detaliu scurt și continuăm natural, ca într-o conversație normală."
+            )
+
+        if skill_instruction and "SALES" in skill_instruction:
+            return (
+                "Absolutely — let's find the best option for you. "
+                "Tell me what outcome you want and the budget you have in mind, and I'll recommend the best fit."
+            )
+        return (
+            f"Alright, I can help with that. You said: “{user_text}”. "
+            "Give me one more short detail and we'll continue naturally from there."
+        )
+
     async def generate(
         self,
         user_text: str,
@@ -50,8 +73,6 @@ class MockLLMProvider:
         conversation_history: list[dict[str, str]] | None = None,
     ) -> str:
         history = conversation_history or []
-        skill_text = f" {skill_instruction}" if skill_instruction else ""
-
         research = context.get("research") if isinstance(context, dict) else None
 
         if research and research.get("status") in {"ok", "dry_run"}:
@@ -84,16 +105,7 @@ class MockLLMProvider:
             )
             return f"{base}{next_step} (Source: {kb_match.source})"
 
-        if language == "ro":
-            return (
-                f"Salut! Sunt {settings.agent_name} de la {settings.business_name}.{skill_text} "
-                "Spune-mi pe scurt ce ai nevoie și te ajut pas cu pas."
-            )
-
-        return (
-            f"Hi! I'm {settings.agent_name} from {settings.business_name}.{skill_text} "
-            "Tell me briefly what you need and I'll help step by step."
-        )
+        return self._natural_reply(user_text, language, skill_instruction)
 
 
 class OpenAILLMProvider:
@@ -144,6 +156,7 @@ class OpenAILLMProvider:
                         f"Agent display name: {settings.agent_name}. "
                         "Reply in the same language as the user. "
                         "Keep responses brief, natural, and human-sounding for speech. "
+                        "Sound like a real chatbot assistant, not a rigid support script. "
                         "Use knowledge base evidence as grounding, but do not sound like a rigid FAQ bot. "
                         "If the user repeats the same topic, do not repeat the same sentence verbatim; instead move the conversation forward with the next helpful question or action. "
                         "If web research or URL inspection results are present, weave them into the reply naturally like a real AI assistant. "
@@ -167,7 +180,7 @@ class OpenAILLMProvider:
                     ),
                 },
             ],
-            "temperature": 0.6,
+            "temperature": 0.65,
         }
 
         async with httpx.AsyncClient(timeout=20) as client:

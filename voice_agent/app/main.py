@@ -219,15 +219,9 @@ async def twilio_voice(
         lang_code = settings.twilio_default_language
         lang = "ro" if lang_code.startswith("ro") else "en"
         intro = build_intro(lang)
-        reprompt = (
-            "Nu te-am auzit clar. Te rog repetă întrebarea."
-            if lang == "ro"
-            else "I couldn't hear you clearly. Please repeat your question."
-        )
         return (
             '<?xml version="1.0" encoding="UTF-8"?>'
             f'<Response><Say voice="{twilio_voice_for_language(lang)}" language="{lang_code}">{xml_safe(intro)}</Say>'
-            f'<Say voice="{twilio_voice_for_language(lang)}" language="{lang_code}">{xml_safe(reprompt)}</Say>'
             f"{gather_loop(lang_code)}"
             "</Response>"
         )

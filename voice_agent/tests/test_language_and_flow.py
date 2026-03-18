@@ -172,3 +172,20 @@ def test_simulate_turn_can_trigger_research_skill_naturally():
     body = res.json()
     assert body["skill"] == "research"
     assert body["actions"]
+
+
+def test_twilio_initial_prompt_does_not_include_could_not_hear_reprompt():
+    res = client.post("/twilio/voice", data={"CallSid": "CA999", "SpeechResult": ""})
+    assert res.status_code == 200
+    assert "Nu te-am auzit clar" not in res.text
+    assert "I couldn't hear you clearly" not in res.text
+
+
+def test_mock_chatbot_reply_feels_conversational_when_no_kb_match():
+    res = client.post(
+        "/api/simulate-turn",
+        json={"session_id": "chatbot-1", "user_text": "Am nevoie de ceva mai bun pentru echipa mea"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert "Ai spus" in body["answer"] or "te ajut" in body["answer"]

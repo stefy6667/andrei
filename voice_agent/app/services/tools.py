@@ -1,5 +1,6 @@
 from app.services.calendar import CalendarClient
 from app.services.integrations import CRMClient, DatabaseClient
+from app.services.research import ResearchClient
 from app.services.telephony import TelephonyService
 
 
@@ -10,11 +11,13 @@ class ToolClient:
         crm: CRMClient,
         telephony: TelephonyService,
         calendar: CalendarClient,
+        research: ResearchClient,
     ) -> None:
         self.db = db
         self.crm = crm
         self.telephony = telephony
         self.calendar = calendar
+        self.research = research
 
     async def get_customer_context(self, session_id: str) -> dict:
         profile = await self.db.fetch_customer_profile(session_id)
@@ -28,6 +31,7 @@ class ToolClient:
             "database_connected": profile.get("database_connected", False),
             "crm_connected": tickets.get("crm_connected", False),
             "calendar_connected": self.calendar.configured(),
+            "web_search_connected": self.research.configured(),
         }
 
     async def schedule_meeting(
@@ -42,3 +46,9 @@ class ToolClient:
 
     async def send_sms(self, to_number: str, message: str) -> dict:
         return await self.telephony.send_sms(to_number, message)
+
+    async def search_web(self, query: str) -> dict:
+        return await self.research.search_web(query)
+
+    async def inspect_url(self, url: str) -> dict:
+        return await self.research.inspect_url(url)

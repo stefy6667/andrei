@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     google_calendar_base_url: str = "https://www.googleapis.com/calendar/v3"
     google_oauth_token_url: str = "https://oauth2.googleapis.com/token"
 
+    # Web research
+    tavily_api_key: str = ""
+    tavily_base_url: str = "https://api.tavily.com"
+    web_search_max_results: int = 3
+
     # Operations
     human_handoff_number: str = ""
     admin_alert_email: str = ""

@@ -20,11 +20,11 @@ def test_language_switch_english():
     assert body["language"] == "en"
 
 
-def test_skills_endpoint_lists_scheduling():
+def test_skills_endpoint_lists_research():
     res = client.get("/api/skills")
     assert res.status_code == 200
     names = [item["name"] for item in res.json()["skills"]]
-    assert "scheduling" in names
+    assert "research" in names
 
 
 def test_skill_selection_sales():
@@ -62,6 +62,7 @@ def test_health_payload():
     assert "intro_only_mode" in body
     assert "google_calendar_configured" in body
     assert "twilio_sms_configured" in body
+    assert "web_search_configured" in body
 
 
 def test_intro_only_mode_returns_intro():
@@ -149,3 +150,25 @@ def test_invoice_follow_up_does_not_repeat_same_kb_answer():
     assert second.status_code == 200
     assert second.json()["answer"] != first.json()["answer"]
     assert "email" in second.json()["answer"].lower() or "factura" in second.json()["answer"].lower()
+
+
+def test_research_endpoint_returns_dry_run_without_api_key():
+    res = client.post(
+        "/api/actions/research",
+        json={"query": "latest ecommerce pricing trends"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "dry_run"
+    assert body["provider"] == "tavily"
+
+
+def test_simulate_turn_can_trigger_research_skill_naturally():
+    res = client.post(
+        "/api/simulate-turn",
+        json={"session_id": "research-1", "user_text": "Verifică pe internet https://example.com"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["skill"] == "research"
+    assert body["actions"]

@@ -36,3 +36,8 @@ class ScheduleMeetingRequest(BaseModel):
     summary: str = Field(min_length=3)
     description: str = ""
     language: str = Field(default="ro")
+
+
+class ResearchRequest(BaseModel):
+    query: str | None = None
+    url: str | None = None

@@ -1,10 +1,12 @@
 from html import escape
+import re
 
 from fastapi import FastAPI, Form
 from fastapi.responses import PlainTextResponse
 
 from app.config import settings
 from app.models import (
+    ResearchRequest,
     ScheduleMeetingRequest,
     SimulateTurnRequest,
     SimulateTurnResponse,
@@ -17,6 +19,7 @@ from app.services.integrations import build_integration_clients
 from app.services.knowledge_base import KnowledgeBase, KnowledgeMatch
 from app.services.language import LanguageDetector
 from app.services.orchestrator import OpenAILLMProvider
+from app.services.research import ResearchClient
 from app.services.session_store import SessionStore
 from app.services.telephony import TelephonyService
 from app.services.tools import ToolClient
@@ -31,7 +34,8 @@ sessions = SessionStore()
 db_client, crm_client = build_integration_clients()
 telephony = TelephonyService()
 calendar = CalendarClient()
-tools = ToolClient(db_client, crm_client, telephony, calendar)
+research = ResearchClient()
+tools = ToolClient(db_client, crm_client, telephony, calendar, research)
 
 
 def build_intro(language: str) -> str:
@@ -79,6 +83,17 @@ def needs_handoff(user_text: str, kb_match: KnowledgeMatch | None, history: list
     return any(marker in lower_text for marker in urgent_markers) or (kb_match is None and repeated_failures)
 
 
+def extract_url(text: str) -> str | None:
+    match = re.search(r"https?://\S+", text)
+    return match.group(0) if match else None
+
+
+def wants_web_research(text: str) -> bool:
+    lowered = text.lower()
+    markers = ["search", "internet", "online", "verify", "check this", "cauta", "caută", "verifica", "verifică", "site", "link"]
+    return any(marker in lowered for marker in markers) or bool(extract_url(text))
+
+
 async def build_turn_response(session_id: str, user_text: str) -> SimulateTurnResponse:
     previous_language = sessions.get_language(session_id)
     detection = language_detector.detect(user_text, previous_language=previous_language)
@@ -91,6 +106,13 @@ async def build_turn_response(session_id: str, user_text: str) -> SimulateTurnRe
         return result
 
     context = await tools.get_customer_context(session_id)
+    actions: list[dict] = []
+    if wants_web_research(user_text):
+        url = extract_url(user_text)
+        research_result = await (tools.inspect_url(url) if url else tools.search_web(user_text))
+        context["research"] = research_result
+        actions.append(research_result)
+
     kb_match = kb.search(user_text, detection.language)
     active_skill = skill_registry.resolve(detection.language, user_text)
     skill_instruction = active_skill.prompt_instruction(detection.language) if active_skill else None
@@ -105,7 +127,6 @@ async def build_turn_response(session_id: str, user_text: str) -> SimulateTurnRe
         )
         source = "handoff"
         citations: list[str] = []
-        actions: list[dict] = []
     else:
         answer = await llm.generate(
             user_text,
@@ -115,9 +136,8 @@ async def build_turn_response(session_id: str, user_text: str) -> SimulateTurnRe
             skill_instruction,
             history,
         )
-        source = "knowledge_base" if kb_match else "llm"
+        source = "knowledge_base" if kb_match else ("research" if actions else "llm")
         citations = [kb_match.source] if kb_match else []
-        actions = []
 
     sessions.append_turn(session_id, "assistant", answer)
     return SimulateTurnResponse(
@@ -143,6 +163,7 @@ async def health() -> dict:
         "intro_only_mode": settings.intro_only_mode,
         "google_calendar_configured": calendar.configured(),
         "twilio_sms_configured": bool(settings.twilio_account_sid and settings.twilio_auth_token and (settings.twilio_sms_from_number or settings.twilio_from_number)),
+        "web_search_configured": research.configured(),
     }
 
 
@@ -176,6 +197,15 @@ async def schedule_call(payload: ScheduleMeetingRequest) -> dict:
         f"Scheduled meeting for {payload.attendee_email} at {payload.start_iso} with status {result.get('status')}",
     )
     return result
+
+
+@app.post("/api/actions/research")
+async def research_action(payload: ResearchRequest) -> dict:
+    if payload.url:
+        return await tools.inspect_url(payload.url)
+    if payload.query:
+        return await tools.search_web(payload.query)
+    return {"status": "error", "message": "Provide either query or url."}
 
 
 @app.post("/twilio/voice", response_class=PlainTextResponse)

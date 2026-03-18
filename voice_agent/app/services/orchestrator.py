@@ -52,6 +52,14 @@ class MockLLMProvider:
         history = conversation_history or []
         skill_text = f" {skill_instruction}" if skill_instruction else ""
 
+        research = context.get("research") if isinstance(context, dict) else None
+
+        if research and research.get("status") in {"ok", "dry_run"}:
+            summary = research.get("summary") or research.get("title") or ""
+            if language == "ro":
+                return f"Am verificat informația și iată pe scurt ce am găsit: {summary}"
+            return f"I checked the information and here is the short version: {summary}"
+
         if kb_match and kb_match.confidence >= 0.6:
             repeated = self._already_answered_kb(history, kb_match)
             is_invoice = "factura" in kb_match.source.lower() or "invoice" in kb_match.source.lower()
@@ -138,6 +146,7 @@ class OpenAILLMProvider:
                         "Keep responses brief, natural, and human-sounding for speech. "
                         "Use knowledge base evidence as grounding, but do not sound like a rigid FAQ bot. "
                         "If the user repeats the same topic, do not repeat the same sentence verbatim; instead move the conversation forward with the next helpful question or action. "
+                        "If web research or URL inspection results are present, weave them into the reply naturally like a real AI assistant. "
                         "If knowledge base evidence is present, mention the source label naturally. "
                         "If data is missing or confidence is low, ask one clarification question instead of inventing details. "
                         "Recommend a human handoff for billing disputes, legal requests, security concerns, or repeated failures. "

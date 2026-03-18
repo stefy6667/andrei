@@ -5,15 +5,17 @@ Deploy-ready FastAPI service for a customer support voice agent that:
 - places outbound calls (Twilio API);
 - responds dynamically (knowledge + LLM, not static scripts);
 - switches automatically between Romanian and English;
-- supports plug-and-play skills (sales/support/retention/scheduling);
-- can trigger production actions such as Google Meet scheduling and Twilio SMS sending.
+- supports plug-and-play skills (sales/support/retention/scheduling/research);
+- can trigger production actions such as Google Meet scheduling, Twilio SMS sending, and natural web research.
 
 ## Features
 
 - **Language auto-switch** (`ro`/`en`) per turn.
 - **Business customization** (`BUSINESS_NAME`, `AGENT_NAME`, greetings).
-- **Skill router** (`sales`, `support`, `retention`, `scheduling`).
+- **Skill router** (`sales`, `support`, `retention`, `scheduling`, `research`).
 - **Knowledge lookup** (`knowledge/faq.json`) for grounded answers.
+- **Research actions** for URL inspection and optional web search.
+- **Sales-oriented prompting** for discovery, value framing, and next-step closing.
 - **DB integration ready** with a default **SQLite** implementation that works out-of-the-box.
 - **CRM API connector** for external software.
 - **Twilio inbound/outbound voice** and **Twilio SMS action endpoint**.
@@ -71,6 +73,8 @@ Copy `.env.example` and set values:
   - `DATABASE_URL`, `CRM_API_BASE_URL`, `CRM_API_KEY`
 - Google Calendar / Meet:
   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_CALENDAR_ID`, `GOOGLE_CALENDAR_TIMEZONE`
+- Web research:
+  - `TAVILY_API_KEY`, `TAVILY_BASE_URL`, `WEB_SEARCH_MAX_RESULTS`
 - Operations:
   - `HUMAN_HANDOFF_NUMBER`, `ADMIN_ALERT_EMAIL`
 
@@ -96,6 +100,7 @@ GREETING_RO=Bună! Sunt Ana de la Compania X. Cu ce te pot ajuta astăzi?
 - `POST /api/simulate-turn`
 - `POST /api/actions/send-sms`
 - `POST /api/actions/schedule-call`
+- `POST /api/actions/research`
 - `POST /twilio/voice`
 - `POST /twilio/outbound`
 
@@ -131,7 +136,24 @@ curl -X POST http://localhost:8000/api/actions/schedule-call \
   }'
 ```
 
+### Example web research
+
+```bash
+curl -X POST http://localhost:8000/api/actions/research \
+  -H "Content-Type: application/json" \
+  -d '{"query":"latest ecommerce pricing trends"}'
+```
+
+### Example URL inspection
+
+```bash
+curl -X POST http://localhost:8000/api/actions/research \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com"}'
+```
+
 If Google credentials are missing, the scheduling endpoint returns a **dry-run** payload with a demo Meet link so you can test the integration flow before wiring production secrets.
+If `TAVILY_API_KEY` is missing, search requests return a **dry-run** response, but direct URL inspection still works.
 
 ---
 
@@ -158,9 +180,10 @@ This project does **not** fine-tune a model. In the current implementation, “t
 3. **Actions**:
    - connect real CRM endpoints;
    - provide Google Calendar credentials for Meet scheduling;
-   - provide Twilio credentials for voice/SMS.
+   - provide Twilio credentials for voice/SMS;
+   - provide Tavily credentials if you want external web search.
 
-For enterprise rollout, move from FAQ JSON to vector search over policy, pricing, contracts, and internal support docs.
+For enterprise rollout, move from FAQ JSON to vector search over policy, pricing, contracts, internal support docs, and product content.
 
 ---
 
@@ -171,6 +194,7 @@ Defined in `app/services/agent_skills.py`:
 - `support`
 - `retention`
 - `scheduling`
+- `research`
 
 To add a new skill:
 1. Add class with `can_handle()` + `prompt_instruction()`.
@@ -186,6 +210,11 @@ To add a new skill:
 - Uses Twilio Messages API when credentials are configured.
 - Returns `dry_run` when Twilio SMS credentials are missing.
 
+### Web research / URL verification
+- Endpoint: `POST /api/actions/research`
+- Uses Tavily search when `TAVILY_API_KEY` is configured.
+- Can inspect a URL directly without a Tavily key.
+
 ### Schedule Google Meet / calendar callback
 - Endpoint: `POST /api/actions/schedule-call`
 - Uses Google OAuth refresh-token flow and Calendar Events API.
@@ -198,7 +227,7 @@ To add a new skill:
 
 - `DatabaseClient` uses SQLite by default (`voice_agent.db`) so deployment works immediately.
 - `CRMClient` integrates external software APIs (HubSpot/Salesforce/Zoho/custom).
-- `ToolClient` merges DB + CRM context and now also exposes SMS + calendar actions.
+- `ToolClient` merges DB + CRM context and now also exposes SMS, calendar, and research actions.
 
 For enterprise rollout, replace SQLite implementation with your production DB driver and schema.
 

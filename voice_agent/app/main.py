@@ -4,8 +4,15 @@ from fastapi import FastAPI, Form
 from fastapi.responses import PlainTextResponse
 
 from app.config import settings
-from app.models import SimulateTurnRequest, SimulateTurnResponse, TwilioOutboundRequest
+from app.models import (
+    ScheduleMeetingRequest,
+    SimulateTurnRequest,
+    SimulateTurnResponse,
+    SmsRequest,
+    TwilioOutboundRequest,
+)
 from app.services.agent_skills import SkillRegistry
+from app.services.calendar import CalendarClient
 from app.services.integrations import build_integration_clients
 from app.services.knowledge_base import KnowledgeBase, KnowledgeMatch
 from app.services.language import LanguageDetector
@@ -22,8 +29,9 @@ kb = KnowledgeBase()
 llm = OpenAILLMProvider()
 sessions = SessionStore()
 db_client, crm_client = build_integration_clients()
-tools = ToolClient(db_client, crm_client)
 telephony = TelephonyService()
+calendar = CalendarClient()
+tools = ToolClient(db_client, crm_client, telephony, calendar)
 
 
 def build_intro(language: str) -> str:
@@ -97,6 +105,7 @@ async def build_turn_response(session_id: str, user_text: str) -> SimulateTurnRe
         )
         source = "handoff"
         citations: list[str] = []
+        actions: list[dict] = []
     else:
         answer = await llm.generate(
             user_text,
@@ -108,6 +117,7 @@ async def build_turn_response(session_id: str, user_text: str) -> SimulateTurnRe
         )
         source = "knowledge_base" if kb_match else "llm"
         citations = [kb_match.source] if kb_match else []
+        actions = []
 
     sessions.append_turn(session_id, "assistant", answer)
     return SimulateTurnResponse(
@@ -118,6 +128,7 @@ async def build_turn_response(session_id: str, user_text: str) -> SimulateTurnRe
         skill=active_skill.name if active_skill else None,
         handoff_recommended=handoff,
         citations=citations,
+        actions=actions,
     )
 
 
@@ -130,6 +141,8 @@ async def health() -> dict:
         "business": settings.business_name,
         "skills": len(skill_registry.list_skills()),
         "intro_only_mode": settings.intro_only_mode,
+        "google_calendar_configured": calendar.configured(),
+        "twilio_sms_configured": bool(settings.twilio_account_sid and settings.twilio_auth_token and (settings.twilio_sms_from_number or settings.twilio_from_number)),
     }
 
 
@@ -141,6 +154,28 @@ async def list_skills() -> dict:
 @app.post("/api/simulate-turn", response_model=SimulateTurnResponse)
 async def simulate_turn(payload: SimulateTurnRequest) -> SimulateTurnResponse:
     return await build_turn_response(payload.session_id, payload.user_text)
+
+
+@app.post("/api/actions/send-sms")
+async def send_sms(payload: SmsRequest) -> dict:
+    return await tools.send_sms(payload.to_number, payload.message)
+
+
+@app.post("/api/actions/schedule-call")
+async def schedule_call(payload: ScheduleMeetingRequest) -> dict:
+    result = await tools.schedule_meeting(
+        attendee_email=payload.attendee_email,
+        start_iso=payload.start_iso,
+        end_iso=payload.end_iso,
+        summary=payload.summary,
+        description=payload.description,
+    )
+    sessions.append_turn(
+        payload.session_id,
+        "system",
+        f"Scheduled meeting for {payload.attendee_email} at {payload.start_iso} with status {result.get('status')}",
+    )
+    return result
 
 
 @app.post("/twilio/voice", response_class=PlainTextResponse)

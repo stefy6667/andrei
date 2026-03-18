@@ -20,17 +20,26 @@ def test_language_switch_english():
     assert body["language"] == "en"
 
 
-def test_skills_endpoint_lists_sales():
+def test_skills_endpoint_lists_scheduling():
     res = client.get("/api/skills")
     assert res.status_code == 200
     names = [item["name"] for item in res.json()["skills"]]
-    assert "sales" in names
+    assert "scheduling" in names
 
 
 def test_skill_selection_sales():
     res = client.post("/api/simulate-turn", json={"session_id": "3", "user_text": "What is your pricing?"})
     assert res.status_code == 200
     assert res.json()["skill"] == "sales"
+
+
+def test_skill_selection_scheduling():
+    res = client.post(
+        "/api/simulate-turn",
+        json={"session_id": "meet-1", "user_text": "Te rog programează un apel mâine"},
+    )
+    assert res.status_code == 200
+    assert res.json()["skill"] == "scheduling"
 
 
 def test_twilio_webhook_xml():
@@ -51,6 +60,8 @@ def test_health_payload():
     assert "business" in body
     assert "skills" in body
     assert "intro_only_mode" in body
+    assert "google_calendar_configured" in body
+    assert "twilio_sms_configured" in body
 
 
 def test_intro_only_mode_returns_intro():
@@ -92,3 +103,34 @@ def test_handoff_for_sensitive_request():
     body = res.json()
     assert body["handoff_recommended"] is True
     assert body["source"] == "handoff"
+
+
+def test_send_sms_endpoint_dry_run_without_credentials():
+    res = client.post(
+        "/api/actions/send-sms",
+        json={"to_number": "+40123456789", "message": "Confirmare programare"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "dry_run"
+    assert body["provider"] == "twilio"
+
+
+def test_schedule_call_endpoint_dry_run_without_google_credentials():
+    res = client.post(
+        "/api/actions/schedule-call",
+        json={
+            "session_id": "meet-2",
+            "attendee_email": "client@example.com",
+            "start_iso": "2026-03-20T10:00:00+02:00",
+            "end_iso": "2026-03-20T10:30:00+02:00",
+            "summary": "Demo call",
+            "description": "Google Meet onboarding",
+            "language": "ro",
+        },
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "dry_run"
+    assert body["provider"] == "google_calendar"
+    assert body["meet_link"]

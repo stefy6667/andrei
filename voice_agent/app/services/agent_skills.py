@@ -73,9 +73,27 @@ class RetentionSkill:
         return "Active skill: RETENTION. Understand churn reason, offer relevant alternatives, and avoid pressure."
 
 
+class SchedulingSkill:
+    name = "scheduling"
+    description = "Handles meeting booking, calendar coordination, and callback scheduling."
+
+    RO_KEYWORDS = {"programare", "programeaza", "programează", "intalnire", "întâlnire", "apel", "calendar"}
+    EN_KEYWORDS = {"schedule", "meeting", "meet", "callback", "calendar", "book a call"}
+
+    def can_handle(self, ctx: SkillContext) -> bool:
+        text = ctx.user_text.lower()
+        keywords = self.RO_KEYWORDS if ctx.language == "ro" else self.EN_KEYWORDS
+        return any(word in text for word in keywords)
+
+    def prompt_instruction(self, language: str) -> str:
+        if language == "ro":
+            return "Skill activ: SCHEDULING. Colectează datele necesare pentru programare și propune următorul pas pentru creare calendar/Google Meet."
+        return "Active skill: SCHEDULING. Collect the details needed to schedule a meeting and propose the next step for calendar/Google Meet creation."
+
+
 class SkillRegistry:
     def __init__(self) -> None:
-        self._skills: list[AgentSkill] = [SalesSkill(), SupportSkill(), RetentionSkill()]
+        self._skills: list[AgentSkill] = [SalesSkill(), SupportSkill(), RetentionSkill(), SchedulingSkill()]
 
     def list_skills(self) -> list[dict[str, str]]:
         return [{"name": s.name, "description": s.description} for s in self._skills]

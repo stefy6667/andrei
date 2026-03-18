@@ -189,3 +189,27 @@ def test_mock_chatbot_reply_feels_conversational_when_no_kb_match():
     assert res.status_code == 200
     body = res.json()
     assert "Ai spus" in body["answer"] or "te ajut" in body["answer"]
+
+
+def test_outbound_endpoint_dry_run_without_credentials():
+    res = client.post(
+        "/twilio/outbound",
+        json={"to_number": "+40123456789", "message": "Te sunam pentru demo", "language": "ro"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "dry_run"
+    assert body["provider"] == "twilio"
+
+
+def test_sales_callback_request_creates_outbound_action():
+    res = client.post(
+        "/api/simulate-turn",
+        json={"session_id": "sales-call", "user_text": "Vreau să cumpăr, sună-mă la +40 712 345 678"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["skill"] == "sales"
+    assert body["actions"]
+    assert body["actions"][0]["provider"] == "twilio"
+    assert "apel" in body["answer"].lower() or "call" in body["answer"].lower()

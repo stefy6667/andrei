@@ -94,6 +94,39 @@ def wants_web_research(text: str) -> bool:
     return any(marker in lowered for marker in markers) or bool(extract_url(text))
 
 
+def extract_phone_number(text: str) -> str | None:
+    match = re.search(r"(\+?\d[\d\s\-]{7,}\d)", text)
+    if not match:
+        return None
+    return re.sub(r"[\s\-]", "", match.group(1))
+
+
+def wants_outbound_call(text: str) -> bool:
+    lowered = text.lower()
+    markers = ["call me", "call me back", "callback", "sună-mă", "suna-ma", "sunati-ma", "sunăți-mă", "apelati-ma", "apelează-mă", "demo call"]
+    return any(marker in lowered for marker in markers)
+
+
+def build_outbound_message(language: str, skill_name: str | None) -> str:
+    if language == "ro":
+        if skill_name == "sales":
+            return "Revin cu un apel scurt pentru a-ți prezenta oferta potrivită și următorii pași."
+        return "Revin cu un apel scurt pentru a continua discuția și a te ajuta mai departe."
+    if skill_name == "sales":
+        return "I’m calling back with the best-fit offer and the next steps."
+    return "I’m calling back shortly so we can continue the conversation."
+
+
+def build_outbound_confirmation(language: str, phone_number: str, status: str) -> str:
+    if language == "ro":
+        if status == "dry_run":
+            return f"Perfect, am pregătit un apel de revenire către {phone_number}. După ce activezi credențialele Twilio, apelul va porni automat."
+        return f"Perfect, am programat un apel de revenire către {phone_number}. Vei fi contactat în scurt timp."
+    if status == "dry_run":
+        return f"Perfect, I prepared a callback to {phone_number}. Once Twilio credentials are enabled, the outbound call will run automatically."
+    return f"Perfect, I scheduled a callback to {phone_number}. You should receive the call shortly."
+
+
 async def build_turn_response(session_id: str, user_text: str) -> SimulateTurnResponse:
     previous_language = sessions.get_language(session_id)
     detection = language_detector.detect(user_text, previous_language=previous_language)
@@ -119,6 +152,16 @@ async def build_turn_response(session_id: str, user_text: str) -> SimulateTurnRe
     history = sessions.get_recent_turns(session_id)
     handoff = needs_handoff(user_text, kb_match, history)
 
+    phone_number = extract_phone_number(user_text)
+    outbound_action = None
+    if phone_number and wants_outbound_call(user_text):
+        outbound_action = await telephony.create_outbound_call(
+            phone_number,
+            build_outbound_message(detection.language, active_skill.name if active_skill else None),
+            detection.language,
+        )
+        actions.append(outbound_action)
+
     if handoff:
         answer = (
             "Te conectez cu un coleg uman care poate verifica în siguranță acest caz."
@@ -128,15 +171,18 @@ async def build_turn_response(session_id: str, user_text: str) -> SimulateTurnRe
         source = "handoff"
         citations: list[str] = []
     else:
-        answer = await llm.generate(
-            user_text,
-            detection.language,
-            kb_match,
-            context,
-            skill_instruction,
-            history,
-        )
-        source = "knowledge_base" if kb_match else ("research" if actions else "llm")
+        if outbound_action is not None:
+            answer = build_outbound_confirmation(detection.language, phone_number, outbound_action.get("status", "queued"))
+        else:
+            answer = await llm.generate(
+                user_text,
+                detection.language,
+                kb_match,
+                context,
+                skill_instruction,
+                history,
+            )
+        source = "knowledge_base" if kb_match else ("action" if outbound_action else ("research" if actions else "llm"))
         citations = [kb_match.source] if kb_match else []
 
     sessions.append_turn(session_id, "assistant", answer)

@@ -3,6 +3,7 @@ from typing import Protocol
 import httpx
 
 from app.config import settings
+from app.services.knowledge_base import KnowledgeMatch
 
 
 class LLMProvider(Protocol):
@@ -10,7 +11,7 @@ class LLMProvider(Protocol):
         self,
         user_text: str,
         language: str,
-        kb_answer: str | None,
+        kb_match: KnowledgeMatch | None,
         context: dict,
         skill_instruction: str | None = None,
         conversation_history: list[dict[str, str]] | None = None,
@@ -23,24 +24,28 @@ class MockLLMProvider:
         self,
         user_text: str,
         language: str,
-        kb_answer: str | None,
+        kb_match: KnowledgeMatch | None,
         context: dict,
         skill_instruction: str | None = None,
         conversation_history: list[dict[str, str]] | None = None,
     ) -> str:
-        if kb_answer:
-            return kb_answer
+        if kb_match and kb_match.confidence >= 0.6:
+            return (
+                f"{kb_match.answer} (Sursă: {kb_match.source})"
+                if language == "ro"
+                else f"{kb_match.answer} (Source: {kb_match.source})"
+            )
 
         skill_text = f" [{skill_instruction}]" if skill_instruction else ""
         if language == "ro":
             return (
                 f"Salut! Sunt {settings.agent_name} de la {settings.business_name}.{skill_text} "
-                "Te ajut cu drag. Spune-mi, te rog, câteva detalii și rezolvăm împreună."
+                "Te pot ajuta, dar am nevoie de încă un detaliu ca să răspund corect."
             )
 
         return (
             f"Hi! I'm {settings.agent_name} from {settings.business_name}.{skill_text} "
-            "Happy to help. Please share a few details and we’ll sort this out together."
+            "I can help, but I need one more detail so I can answer accurately."
         )
 
 
@@ -49,7 +54,7 @@ class OpenAILLMProvider:
         self,
         user_text: str,
         language: str,
-        kb_answer: str | None,
+        kb_match: KnowledgeMatch | None,
         context: dict,
         skill_instruction: str | None = None,
         conversation_history: list[dict[str, str]] | None = None,
@@ -68,16 +73,17 @@ class OpenAILLMProvider:
             return await MockLLMProvider().generate(
                 user_text,
                 language,
-                kb_answer,
+                kb_match,
                 context,
                 skill_instruction,
                 conversation_history,
             )
 
         language_name = "Romanian" if language == "ro" else "English"
-        context_text = kb_answer or "No KB match found. Ask concise clarification question."
-        skill_prompt = skill_instruction or "No specific skill active."
+        kb_text = kb_match.answer if kb_match else "No KB match found. Ask one concise clarifying question."
+        kb_source = kb_match.source if kb_match else "none"
         history = conversation_history or []
+        skill_prompt = skill_instruction or "No specific skill active."
 
         payload = {
             "model": model,
@@ -90,11 +96,10 @@ class OpenAILLMProvider:
                         f"Business domain: {settings.business_domain}. "
                         f"Agent display name: {settings.agent_name}. "
                         "Reply in the same language as the user. "
-                        "Sound like a human support rep: warm, natural, short spoken phrases, no robotic style. "
-                        "Acknowledge user emotion briefly, then provide actionable help. "
-                        "Ask at most one follow-up question at a time. "
-                        "Do not invent policy details. "
-                        "Use available customer context and be concise. "
+                        "Keep responses brief and natural for speech. "
+                        "If knowledge base evidence is present, use it and cite the source label in the response. "
+                        "If data is missing or confidence is low, ask one clarification question instead of inventing details. "
+                        "Recommend a human handoff for billing disputes, legal requests, security concerns, or repeated failures. "
                         f"Behavior EN: {settings.behavior_style_en}. "
                         f"Behavior RO: {settings.behavior_style_ro}."
                     ),
@@ -106,7 +111,8 @@ class OpenAILLMProvider:
                         f"Skill instruction: {skill_prompt}\n"
                         f"Customer context: {context}\n"
                         f"Recent conversation turns: {history}\n"
-                        f"KB: {context_text}\n"
+                        f"KB source: {kb_source}\n"
+                        f"KB answer: {kb_text}\n"
                         f"User: {user_text}"
                     ),
                 },

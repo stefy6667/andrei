@@ -7,7 +7,7 @@ from app.config import settings
 from app.models import SimulateTurnRequest, SimulateTurnResponse, TwilioOutboundRequest
 from app.services.agent_skills import SkillRegistry
 from app.services.integrations import build_integration_clients
-from app.services.knowledge_base import KnowledgeBase
+from app.services.knowledge_base import KnowledgeBase, KnowledgeMatch
 from app.services.language import LanguageDetector
 from app.services.orchestrator import OpenAILLMProvider
 from app.services.session_store import SessionStore
@@ -41,9 +41,9 @@ def xml_safe(text: str) -> str:
 
 def gather_loop(language_code: str) -> str:
     return (
-        f"<Gather input=\"speech\" language=\"{language_code}\" action=\"/twilio/voice\" method=\"POST\" timeout=\"5\" speechTimeout=\"auto\" />"
-        "<Pause length=\"1\"/>"
-        "<Redirect method=\"POST\">/twilio/voice</Redirect>"
+        f'<Gather input="speech" language="{language_code}" action="/twilio/voice" method="POST" timeout="5" speechTimeout="auto" />'
+        '<Pause length="1"/>'
+        '<Redirect method="POST">/twilio/voice</Redirect>'
     )
 
 
@@ -56,6 +56,68 @@ def intro_only_response(language: str, session_id: str) -> SimulateTurnResponse:
         answer=intro,
         source="intro_only",
         skill=None,
+    )
+
+
+def needs_handoff(user_text: str, kb_match: KnowledgeMatch | None, history: list[dict[str, str]]) -> bool:
+    lower_text = user_text.lower()
+    urgent_markers = [
+        "lawyer", "legal", "gdpr", "security", "fraud", "complaint", "supervisor", "manager",
+        "human", "operator", "chargeback", "refund",
+    ]
+    repeated_failures = sum(
+        1 for turn in history[-4:] if turn["role"] == "assistant" and "detail" in turn["text"].lower()
+    ) >= 2
+    return any(marker in lower_text for marker in urgent_markers) or (kb_match is None and repeated_failures)
+
+
+async def build_turn_response(session_id: str, user_text: str) -> SimulateTurnResponse:
+    previous_language = sessions.get_language(session_id)
+    detection = language_detector.detect(user_text, previous_language=previous_language)
+    sessions.upsert_language(session_id, detection.language)
+    sessions.append_turn(session_id, "user", user_text)
+
+    if settings.intro_only_mode:
+        result = intro_only_response(detection.language, session_id)
+        sessions.append_turn(session_id, "assistant", result.answer)
+        return result
+
+    context = await tools.get_customer_context(session_id)
+    kb_match = kb.search(user_text, detection.language)
+    active_skill = skill_registry.resolve(detection.language, user_text)
+    skill_instruction = active_skill.prompt_instruction(detection.language) if active_skill else None
+    history = sessions.get_recent_turns(session_id)
+    handoff = needs_handoff(user_text, kb_match, history)
+
+    if handoff:
+        answer = (
+            "Te conectez cu un coleg uman care poate verifica în siguranță acest caz."
+            if detection.language == "ro"
+            else "I’m routing you to a human teammate who can review this safely."
+        )
+        source = "handoff"
+        citations: list[str] = []
+    else:
+        answer = await llm.generate(
+            user_text,
+            detection.language,
+            kb_match,
+            context,
+            skill_instruction,
+            history,
+        )
+        source = "knowledge_base" if kb_match else "llm"
+        citations = [kb_match.source] if kb_match else []
+
+    sessions.append_turn(session_id, "assistant", answer)
+    return SimulateTurnResponse(
+        session_id=session_id,
+        language=detection.language,
+        answer=answer,
+        source=source,
+        skill=active_skill.name if active_skill else None,
+        handoff_recommended=handoff,
+        citations=citations,
     )
 
 
@@ -78,39 +140,7 @@ async def list_skills() -> dict:
 
 @app.post("/api/simulate-turn", response_model=SimulateTurnResponse)
 async def simulate_turn(payload: SimulateTurnRequest) -> SimulateTurnResponse:
-    detection = language_detector.detect(payload.user_text)
-
-    if settings.intro_only_mode:
-        result = intro_only_response(detection.language, payload.session_id)
-        sessions.append_turn(payload.session_id, "assistant", result.answer)
-        return result
-
-    sessions.upsert_language(payload.session_id, detection.language)
-
-    sessions.append_turn(payload.session_id, "user", payload.user_text)
-    context = await tools.get_customer_context(payload.session_id)
-    kb_answer = kb.search(payload.user_text, detection.language)
-    active_skill = skill_registry.resolve(detection.language, payload.user_text)
-    skill_instruction = active_skill.prompt_instruction(detection.language) if active_skill else None
-    history = sessions.get_recent_turns(payload.session_id)
-    answer = await llm.generate(
-        payload.user_text,
-        detection.language,
-        kb_answer,
-        context,
-        skill_instruction,
-        history,
-    )
-    sessions.append_turn(payload.session_id, "assistant", answer)
-
-    source = "knowledge_base" if kb_answer else "llm"
-    return SimulateTurnResponse(
-        session_id=payload.session_id,
-        language=detection.language,
-        answer=answer,
-        source=source,
-        skill=active_skill.name if active_skill else None,
-    )
+    return await build_turn_response(payload.session_id, payload.user_text)
 
 
 @app.post("/twilio/voice", response_class=PlainTextResponse)
@@ -124,7 +154,11 @@ async def twilio_voice(
         lang_code = settings.twilio_default_language
         lang = "ro" if lang_code.startswith("ro") else "en"
         intro = build_intro(lang)
-        reprompt = "Nu te-am auzit clar. Te rog repetă întrebarea." if lang == "ro" else "I couldn't hear you clearly. Please repeat your question."
+        reprompt = (
+            "Nu te-am auzit clar. Te rog repetă întrebarea."
+            if lang == "ro"
+            else "I couldn't hear you clearly. Please repeat your question."
+        )
         return (
             '<?xml version="1.0" encoding="UTF-8"?>'
             f'<Response><Say voice="{twilio_voice_for_language(lang)}" language="{lang_code}">{xml_safe(intro)}</Say>'
@@ -133,42 +167,13 @@ async def twilio_voice(
             "</Response>"
         )
 
-    detection = language_detector.detect(SpeechResult)
-    sessions.append_turn(session_id, "user", SpeechResult)
-
-    if settings.intro_only_mode:
-        intro = build_intro(detection.language)
-        sessions.append_turn(session_id, "assistant", intro)
-        return (
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            f"<Response><Say voice=\"{twilio_voice_for_language(detection.language)}\" language=\"{'ro-RO' if detection.language == 'ro' else 'en-US'}\">"
-            f"{xml_safe(intro)}</Say>"
-            f"{gather_loop('ro-RO' if detection.language == 'ro' else 'en-US')}"
-            "</Response>"
-        )
-
-    sessions.upsert_language(session_id, detection.language)
-
-    context = await tools.get_customer_context(session_id)
-    kb_answer = kb.search(SpeechResult, detection.language)
-    active_skill = skill_registry.resolve(detection.language, SpeechResult)
-    skill_instruction = active_skill.prompt_instruction(detection.language) if active_skill else None
-    history = sessions.get_recent_turns(session_id)
-    answer = await llm.generate(
-        SpeechResult,
-        detection.language,
-        kb_answer,
-        context,
-        skill_instruction,
-        history,
-    )
-    sessions.append_turn(session_id, "assistant", answer)
-
+    result = await build_turn_response(session_id, SpeechResult)
+    lang_code = "ro-RO" if result.language == "ro" else "en-US"
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
-        f"<Response><Say voice=\"{twilio_voice_for_language(detection.language)}\" language=\"{'ro-RO' if detection.language == 'ro' else 'en-US'}\">"
-        f"{xml_safe(answer)}</Say>"
-        f"{gather_loop('ro-RO' if detection.language == 'ro' else 'en-US')}"
+        f'<Response><Say voice="{twilio_voice_for_language(result.language)}" language="{lang_code}">'
+        f"{xml_safe(result.answer)}</Say>"
+        f"{gather_loop(lang_code)}"
         "</Response>"
     )
 

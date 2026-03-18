@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import app, kb
 
 
 client = TestClient(app)
@@ -65,3 +65,30 @@ def test_intro_only_mode_returns_intro():
         assert body["source"] == "intro_only"
     finally:
         settings.intro_only_mode = old
+
+
+def test_kb_answers_include_source_citation():
+    assert kb.items, "Knowledge base should be loaded from the project path"
+    res = client.post("/api/simulate-turn", json={"session_id": "kb-1", "user_text": "Buna, vreau factura"})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["source"] == "knowledge_base"
+    assert body["citations"]
+
+
+def test_ambiguous_language_uses_previous_session_language():
+    client.post("/api/simulate-turn", json={"session_id": "sticky", "user_text": "Buna"})
+    res = client.post("/api/simulate-turn", json={"session_id": "sticky", "user_text": "invoice"})
+    assert res.status_code == 200
+    assert res.json()["language"] == "ro"
+
+
+def test_handoff_for_sensitive_request():
+    res = client.post(
+        "/api/simulate-turn",
+        json={"session_id": "handoff", "user_text": "I need a human agent for a fraud complaint"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["handoff_recommended"] is True
+    assert body["source"] == "handoff"

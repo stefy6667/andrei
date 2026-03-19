@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     web_search_max_results: int = 3
     website_context_url: str = ""
     website_context_mode: str = "faq_only"  # faq_only | on_demand | always
+    events_source_url: str = "https://www.iabilet.ro/"
+    events_max_results: int = 5
 
     # Operations
     human_handoff_number: str = ""

@@ -461,6 +461,8 @@ def test_event_catalog_parses_and_sorts_events():
 
 def test_event_prompt_returns_sorted_events_from_catalog():
     original_method = tools.list_events
+    from app.config import settings
+    original_mode = settings.events_context_mode
 
     async def fake_list_events():
         return {
@@ -482,6 +484,7 @@ def test_event_prompt_returns_sorted_events_from_catalog():
         }
 
     tools.list_events = fake_list_events
+    settings.events_context_mode = "on_demand"
     try:
         res = client.post(
             "/api/simulate-turn",
@@ -494,10 +497,13 @@ def test_event_prompt_returns_sorted_events_from_catalog():
         assert "2026-04-17" in body["answer"]
     finally:
         tools.list_events = original_method
+        settings.events_context_mode = original_mode
 
 
 def test_ticket_link_sms_uses_last_event_link():
     original_method = tools.list_events
+    from app.config import settings
+    original_mode = settings.events_context_mode
 
     async def fake_list_events():
         return {
@@ -514,6 +520,7 @@ def test_ticket_link_sms_uses_last_event_link():
         }
 
     tools.list_events = fake_list_events
+    settings.events_context_mode = "on_demand"
     try:
         client.post(
             "/twilio/voice",
@@ -532,6 +539,43 @@ def test_ticket_link_sms_uses_last_event_link():
         assert "https://www.iabilet.ro/bilete-concert-a/" in action["preview_message"]
     finally:
         tools.list_events = original_method
+        settings.events_context_mode = original_mode
+
+
+def test_events_context_mode_always_returns_events_even_for_generic_sentence():
+    original_method = tools.list_events
+    from app.config import settings
+    original_mode = settings.events_context_mode
+
+    async def fake_list_events():
+        return {
+            "provider": "event_catalog",
+            "status": "ok",
+            "source_url": "https://www.iabilet.ro/",
+            "events": [
+                {
+                    "title": "Festival X",
+                    "url": "https://www.iabilet.ro/bilete-festival-x/",
+                    "date": "2026-05-01",
+                }
+            ],
+        }
+
+    tools.list_events = fake_list_events
+    settings.events_context_mode = "always"
+    try:
+        res = client.post(
+            "/api/simulate-turn",
+            json={"session_id": "events-always", "user_text": "Hello there"},
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["source"] == "events"
+        assert "event business" in body["answer"].lower()
+        assert "Festival X".lower() in body["answer"].lower()
+    finally:
+        tools.list_events = original_method
+        settings.events_context_mode = original_mode
 
 
 def test_website_context_mode_faq_only_does_not_fetch_site():

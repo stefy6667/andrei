@@ -119,6 +119,17 @@ def wants_event_info(text: str) -> bool:
     return any(marker in lowered for marker in markers)
 
 
+def should_fetch_events(user_text: str) -> bool:
+    if not settings.events_source_url:
+        return False
+    mode = settings.events_context_mode.lower().strip()
+    if mode == "off":
+        return False
+    if mode == "always":
+        return True
+    return wants_event_info(user_text)
+
+
 def wants_ticket_link_sms(text: str) -> bool:
     lowered = text.lower()
     markers = [
@@ -150,8 +161,8 @@ def build_events_reply(language: str, events_result: dict) -> str:
     events = events_result.get("events", [])
     if not events:
         if language == "ro":
-            return "Momentan nu am găsit evenimente disponibile pe site. Dacă vrei, verific din nou sau îți pot trimite direct linkul principal de bilete."
-        return "I couldn't find available events on the website right now. If you want, I can check again or send you the main ticket link."
+            return "Suntem un business de evenimente și momentan nu am găsit evenimente disponibile pe site. Dacă vrei, verific din nou sau îți pot trimite direct linkul principal de bilete."
+        return "We are an event business and I couldn't find available events on the website right now. If you want, I can check again or send you the main ticket link."
 
     top_events = events[:3]
     if language == "ro":
@@ -160,7 +171,7 @@ def build_events_reply(language: str, events_result: dict) -> str:
             date_label = f" — {item['date']}" if item.get("date") else ""
             parts.append(f"{item['title']}{date_label}")
         return (
-            "Iată cele mai relevante evenimente găsite, ordonate după dată: "
+            "Suntem un business de evenimente și în prezent găzduim următoarele evenimente, ordonate după dată: "
             + "; ".join(parts)
             + ". Dacă vrei, îți trimit imediat pe SMS linkul de cumpărare pentru unul dintre ele."
         )
@@ -170,7 +181,7 @@ def build_events_reply(language: str, events_result: dict) -> str:
         date_label = f" — {item['date']}" if item.get("date") else ""
         parts.append(f"{item['title']}{date_label}")
     return (
-        "Here are the most relevant events I found, sorted by date: "
+        "We are an event business and we currently host these events, sorted by date: "
         + "; ".join(parts)
         + ". If you want, I can send you the ticket purchase link by SMS right away."
     )
@@ -383,7 +394,7 @@ async def build_turn_response(session_id: str, user_text: str) -> SimulateTurnRe
     context = await tools.get_customer_context(session_id)
     actions: list[dict] = []
     event_result = None
-    if wants_event_info(user_text):
+    if should_fetch_events(user_text):
         event_result = await tools.list_events()
         context["events"] = event_result
         actions.append(event_result)
